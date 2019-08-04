@@ -108,10 +108,10 @@ public class MainActivity extends RosActivity implements CompoundButton.OnChecke
     // Assumes that ROS master is a different machine, with a hard-coded ROS_MASTER_URI.
     // If you'd like to be able to select the URI in the app on startup, replace
     // super( , , ) with super( , ) to start a different version of RosActivity
-    //public MainActivity() { super("LoomoROS", "LoomoROS");}
-    public MainActivity() {
-        super("LoomoROS", "LoomoROS", URI.create("http://192.168.43.119:11311/"));
-    }
+    public MainActivity() { super("LoomoROS", "LoomoROS");}
+    //public MainActivity() {
+    //    super("LoomoROS", "LoomoROS", URI.create("http://192.168.43.119:11311/"));
+    //}
 
     @RequiresApi(api = Build.VERSION_CODES.M)
     @Override
