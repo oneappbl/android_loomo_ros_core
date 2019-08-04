@@ -1,4 +1,7 @@
-package org.ros.android.android_loomo_ros;
+package org.loomo.ros;
+
+import org.ros.message.Duration;
+import org.ros.message.Time;
 
 /**
  * Created by kai on 17-11-2.
@@ -14,4 +17,9 @@ public class Utils {
     public static long platformStampInMillis(long stamp) {
         return (long)((double)stamp/1.0E3D);
     }
+
+    public static long platformStampInNano(long stamp) {
+        return (stamp * 1000);
+    }
+
 }

@@ -1,4 +1,4 @@
-package org.ros.android.android_loomo_ros;
+package org.loomo.ros;
 
 import android.util.Log;
 
@@ -14,20 +14,25 @@ import org.ros.node.topic.Subscriber;
 import org.ros.message.MessageListener;
 import org.ros.time.NtpTimeProvider;
 
+import nav_msgs.Odometry;
 import sensor_msgs.CameraInfo;
 import sensor_msgs.CompressedImage;
 import sensor_msgs.Image;
+import sensor_msgs.Range;
 import std_msgs.Float32;
+import std_msgs.Int8;
 import tf2_msgs.TFMessage;
 import geometry_msgs.Twist;
 
-/**
- * Created by kai on 17-7-16.
- * Modified by mfe on 10-9-18.
- */
-
 public class LoomoRosBridgeNode extends AbstractNodeMain {
     private static final String TAG = "LoomoRosBridgeNode";
+
+    public String RsDepthOpticalFrame = "rs_depth_optical_frame";
+    public String RsColorOpticalFrame = "rs_color_optical_frame";
+    public String FisheyeOpticalFrame = "fisheye_optical_frame";
+    public String UltrasonicFrame     = "ultrasonic_frame";
+    public String LeftInfraredFrame   = "infrared_left_frame";
+    public String RightInfraredFrame  = "infrared_right_frame";
 
     public ConnectedNode mConnectedNode;
     public MessageFactory mMessageFactory;
@@ -40,25 +45,34 @@ public class LoomoRosBridgeNode extends AbstractNodeMain {
     public Publisher<CameraInfo> mRsColorInfoPubr;
     public Publisher<CameraInfo> mRsDepthInfoPubr;
     public Publisher<TFMessage> mTfPubr;
-    public Publisher<Float32> mInfraredPubr;
-    public Publisher<Float32> mUltrasonicPubr;
+    public Publisher<Range> mInfraredPubrLeft;
+    public Publisher<Range> mInfraredPubrRight;
+    public Publisher<Range> mUltrasonicPubr;
     public Publisher<Float32> mBasePitchPubr;
+    public Publisher<Odometry> mOdometryPubr;
 
+    public Subscriber<Int8> mTransformSubr;
     public Subscriber<Twist> mCmdVelSubr;
 
     public NtpTimeProvider mNtpProvider;
 
     public String node_name = "loomo_ros_bridge_node";
     public String tf_prefix = "LO01";
-    public boolean should_pub_ultrasonic = false;
-    public boolean should_pub_infrared = false;
+    public boolean should_pub_ultrasonic = true;
+    public boolean should_pub_infrared = true;
     public boolean should_pub_base_pitch = true;
     public boolean use_tf_prefix = true;
 
-    public LoomoRosBridgeNode() {
+    private boolean is_started = false;
+    private Runnable mOnStarted;
+    private Runnable mOnShutdown;
+
+    public LoomoRosBridgeNode(Runnable onStarted, Runnable onShutdown) {
         super();
 //        this.mNtpProvider = ntpTimeProvider;
         Log.d(TAG, "Created instance of LoomoRosBridgeNode().");
+        mOnStarted = onStarted;
+        mOnShutdown = onShutdown;
     }
 
     @Override
@@ -74,28 +88,45 @@ public class LoomoRosBridgeNode extends AbstractNodeMain {
             tf_prefix = "";
         }
 
+        if (use_tf_prefix){
+            RsDepthOpticalFrame = tf_prefix + "_" + RsDepthOpticalFrame;
+            RsColorOpticalFrame = tf_prefix + "_" + RsColorOpticalFrame;
+            FisheyeOpticalFrame = tf_prefix + "_" + FisheyeOpticalFrame;
+            UltrasonicFrame = tf_prefix + "_" + UltrasonicFrame;
+            LeftInfraredFrame = tf_prefix + "_" + LeftInfraredFrame;
+            RightInfraredFrame =  tf_prefix + "_" + RightInfraredFrame;
+        }
+
         // Create publishers for many Loomo topics
-        mFisheyeCamPubr = connectedNode.newPublisher(tf_prefix+"/fisheye/rgb", Image._TYPE);
-        mFisheyeCompressedPubr = connectedNode.newPublisher(tf_prefix+"/fisheye/rgb/compressed", CompressedImage._TYPE);
-        mFisheyeCamInfoPubr = connectedNode.newPublisher(tf_prefix+"/fisheye/camera_info", CameraInfo._TYPE);
-        mRsColorPubr = connectedNode.newPublisher(tf_prefix+"/realsense_loomo/rgb", Image._TYPE);
-        mRsColorCompressedPubr = connectedNode.newPublisher(tf_prefix+"/realsense_loomo/rgb/compressed", CompressedImage._TYPE);
+        mFisheyeCamPubr = connectedNode.newPublisher(tf_prefix+"/fisheye/rgb/image", Image._TYPE);
+        mFisheyeCompressedPubr = connectedNode.newPublisher(tf_prefix+"/fisheye/rgb/image/compressed", CompressedImage._TYPE);
+        mFisheyeCamInfoPubr = connectedNode.newPublisher(tf_prefix+"/fisheye/rgb/camera_info", CameraInfo._TYPE);
+        mRsColorPubr = connectedNode.newPublisher(tf_prefix+"/realsense_loomo/rgb/image", Image._TYPE);
+        mRsColorCompressedPubr = connectedNode.newPublisher(tf_prefix+"/realsense_loomo/rgb/image/compressed", CompressedImage._TYPE);
         mRsColorInfoPubr = connectedNode.newPublisher(tf_prefix+"/realsense_loomo/rgb/camera_info", CameraInfo._TYPE);
-        mRsDepthPubr = connectedNode.newPublisher(tf_prefix+"/realsense_loomo/depth", Image._TYPE);
+        mRsDepthPubr = connectedNode.newPublisher(tf_prefix+"/realsense_loomo/depth/image", Image._TYPE);
         mRsDepthInfoPubr = connectedNode.newPublisher(tf_prefix+"/realsense_loomo/depth/camera_info", CameraInfo._TYPE);
         mTfPubr = connectedNode.newPublisher("/tf", TFMessage._TYPE);
-        mInfraredPubr = connectedNode.newPublisher(tf_prefix+"/infrared", Float32._TYPE);
-        mUltrasonicPubr = connectedNode.newPublisher(tf_prefix+"/ultrasonic", Float32._TYPE);
+        mInfraredPubrLeft = connectedNode.newPublisher(tf_prefix+"/left_infrared", Range._TYPE);
+        mInfraredPubrRight = connectedNode.newPublisher(tf_prefix+"/right_infrared", Range._TYPE);
+        mUltrasonicPubr = connectedNode.newPublisher(tf_prefix+"/ultrasonic", Range._TYPE);
         mBasePitchPubr = connectedNode.newPublisher(tf_prefix+"/base_pitch", Float32._TYPE);
+        mOdometryPubr = connectedNode.newPublisher(tf_prefix+"/odom", Odometry._TYPE);
 
         // Subscribe to commanded twist msgs (e.g. from joystick or autonomous driving software)
         mCmdVelSubr = mConnectedNode.newSubscriber(tf_prefix+"/cmd_vel", Twist._TYPE);
 
+        // Subscribe to a topic instructing the loomo to change modes
+        mTransformSubr = mConnectedNode.newSubscriber(tf_prefix+"/mode", Int8._TYPE);
+
+        mOnStarted.run();
     }
 
     @Override
     public void onShutdown(Node node) {
         super.onShutdown(node);
+
+        mOnShutdown.run();
     }
 
     @Override

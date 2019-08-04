@@ -1,4 +1,4 @@
-package org.ros.android.android_loomo_ros;
+package org.loomo.ros;
 
 import android.os.AsyncTask;
 import android.util.Log;
@@ -18,37 +18,57 @@ import android.os.Handler;
  * Created by mfe on 7/24/18.
  */
 
-public class LocomotionSubscriber {
+public class LocomotionSubscriber implements LoomoRosBridgeConsumer {
     public static final String TAG = "LocomotionSubscriber";
 
     private Base mBase;
     private LoomoRosBridgeNode mBridgeNode;
+    boolean mStarted = false;
 
-    public LocomotionSubscriber(Base mBase, LoomoRosBridgeNode mBridgeNode){
-        this.mBase = mBase;
+    public LocomotionSubscriber(){
+    }
+
+    @Override
+    public void node_started(LoomoRosBridgeNode mBridgeNode)
+    {
         this.mBridgeNode = mBridgeNode;
+    }
+
+    public void loomo_started(Base mBase)
+    {
+        this.mBase = mBase;
 
         // Configure Base to accept raw linear/angular velocity commands
         this.mBase.setControlMode(Base.CONTROL_MODE_RAW);
-
     }
 
-    public void start_listening(){
-        // wait til ROS subscriber is set up, then start listening TODO: make this better
-        Handler handler=new Handler();
-        Runnable r=new Runnable() {
-            public void run() {
-                //what ever you do here will be done after 5 seconds delay.
-                Log.d(TAG, "Waited for ROS subscriber to connect. Going to hook up to cmd_vel now.");
-                mBridgeNode.mCmdVelSubr.addMessageListener(cmdVelListener);
-            }
-        };
-        handler.postDelayed(r, 5000);
-    };
+    @Override
+    public void start(){
+
+        if (mBase == null || mBridgeNode == null || mStarted)
+        {
+            Log.d(TAG, "Cannot start_listening yet, a required service is not ready");
+            return;
+        }
+
+        mStarted = true;
+
+        mBridgeNode.mCmdVelSubr.addMessageListener(cmdVelListener);
+    }
+
+    @Override
+    public void stop() {
+        mBridgeNode.mCmdVelSubr.removeAllMessageListeners();
+        mStarted = false;
+    }
 
     MessageListener<Twist> cmdVelListener = new MessageListener<Twist>() {
         @Override
         public void onNewMessage(Twist message) {
+            if (mBase == null) {
+                return;
+            }
+
             mBase.setLinearVelocity((float)message.getLinear().getX());
             mBase.setAngularVelocity((float)message.getAngular().getZ());
         }
