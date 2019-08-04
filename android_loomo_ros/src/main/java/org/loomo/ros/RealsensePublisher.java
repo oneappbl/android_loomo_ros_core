@@ -1,44 +1,74 @@
-package org.ros.android.android_loomo_ros;
+package org.loomo.ros;
 
 import android.graphics.Bitmap;
 import android.util.Log;
+import android.util.Pair;
 
 import com.segway.robot.sdk.vision.Vision;
+import com.segway.robot.sdk.vision.calibration.ColorDepthCalibration;
+import com.segway.robot.sdk.vision.calibration.Extrinsic;
 import com.segway.robot.sdk.vision.calibration.Intrinsic;
+import com.segway.robot.sdk.vision.calibration.MotionModuleCalibration;
 import com.segway.robot.sdk.vision.frame.Frame;
+import com.segway.robot.sdk.vision.frame.FrameInfo;
+import com.segway.robot.sdk.vision.imu.IMUDataCallback;
 import com.segway.robot.sdk.vision.stream.StreamInfo;
 import com.segway.robot.sdk.vision.stream.StreamType;
 
 import org.jboss.netty.buffer.ChannelBufferOutputStream;
 import org.ros.internal.message.MessageBuffers;
+import org.ros.message.Duration;
+import org.ros.message.Time;
 import org.ros.node.topic.Publisher;
 
 import java.io.IOException;
+import java.nio.ByteBuffer;
 import java.nio.channels.Channels;
 import java.nio.channels.WritableByteChannel;
 import java.util.concurrent.ConcurrentLinkedDeque;
 
+import geometry_msgs.Quaternion;
+import geometry_msgs.Transform;
+import geometry_msgs.TransformStamped;
+import geometry_msgs.Vector3;
 import sensor_msgs.CameraInfo;
 import sensor_msgs.CompressedImage;
 import sensor_msgs.Image;
+import std_msgs.Header;
+
 import java.util.Queue;
+
+import static org.loomo.ros.Utils.platformStampInNano;
+import static org.loomo.ros.Utils.platformStampToSecond;
 
 
 /**
  * Created by mfe on 7/17/18.
  */
 
-public class RealsensePublisher {
+public class RealsensePublisher implements LoomoRosBridgeConsumer, IMUDataCallback {
+
+    private enum RealsenseMetadataSource {
+        DEPTH,
+        COLOR,
+        FISHEYE
+    }
+
+    private class RealsenseMetadata {
+        int frameNum;
+        Long platformStamp;
+        Time rosTime;
+        RealsenseMetadataSource source;
+
+    }
+
     public static final String TAG = "RealsensePublisher";
 
-    private Vision mVision;
-    private LoomoRosBridgeNode mBridgeNode;
-
-    public String RsDepthOpticalFrame = "rs_depth_optical_frame";
-    public String RsColorOpticalFrame = "rs_color_optical_frame";
-    public String FisheyeOpticalFrame = "fisheye_optical_frame";
+    private Vision mVision = null;
+    private LoomoRosBridgeNode mBridgeNode = null;
 
     private Intrinsic mRsColorIntrinsic, mRsDepthIntrinsic, mFisheyeIntrinsic;
+
     private int mRsColorWidth = 640;
     private int mRsColorHeight = 480;
     private int mRsDepthWidth = 320;
@@ -47,29 +77,65 @@ public class RealsensePublisher {
     private int mFisheyeHeight = 480;
 
     private ChannelBufferOutputStream mRsColorOutStream, mRsDepthOutStream, mFisheyeOutStream;
-    public Queue<Long> mDepthStamps;
-    private Bitmap mRsColorBitmap, mFisheyeBitmap;
+    private Queue<Long> mDepthStamps;
+    private Queue<Pair<Long, Time>> mDepthRosStamps;
 
+    private RealsenseMetadata mRealsenseMeta = null;
+
+    private Bitmap mRsColorBitmap, mFisheyeBitmap;
 
     boolean mIsPubRsColor, mIsPubRsDepth, mIsPubFisheye;
 
-    public RealsensePublisher(Vision mVision, LoomoRosBridgeNode mBridgeNode, Queue<Long> mDepthStamps) {
-        this.mVision = mVision;
-        this.mBridgeNode = mBridgeNode;
+    private boolean mColorStarted = false;
+    private boolean mDepthStarted = false;
+    private boolean mFisheyeStarted = false;
 
-        if (mBridgeNode.use_tf_prefix){
-            RsDepthOpticalFrame = mBridgeNode.tf_prefix + "_" + RsDepthOpticalFrame;
-            RsColorOpticalFrame = mBridgeNode.tf_prefix + "_" + RsColorOpticalFrame;
-            FisheyeOpticalFrame = mBridgeNode.tf_prefix + "_" + FisheyeOpticalFrame;
-        }
+    private Long mLatestDepthStamp = 0L;
 
+    public RealsensePublisher(Queue<Long> mDepthStamps, Queue<Pair<Long, Time>> mDepthRosStamps) {
         this.mDepthStamps = mDepthStamps;
+        this.mDepthRosStamps = mDepthRosStamps;
+
         mRsColorOutStream = new ChannelBufferOutputStream(MessageBuffers.dynamicBuffer());
         mRsDepthOutStream = new ChannelBufferOutputStream(MessageBuffers.dynamicBuffer());
         mFisheyeOutStream = new ChannelBufferOutputStream(MessageBuffers.dynamicBuffer());
     }
 
+    public void node_started(LoomoRosBridgeNode mBridgeNode)
+    {
+        this.mBridgeNode = mBridgeNode;
+    }
+
+    @Override
+    public void start() {
+        // No generic initialization is required
+
+        if (mBridgeNode == null || mVision == null)
+        {
+            Log.d(TAG, "Cannot start RealsensePublisher, ROS or Loomo SDK is not ready");
+            return;
+        }
+    }
+
+    @Override
+    public void stop() {
+        // No generic de-initialization is required
+        // TODO: really?
+    }
+
+    public void loomo_started(Vision mVision) {
+        this.mVision = mVision;
+
+        // Get color-depth extrinsic and publish as a TF
+    }
+
     public synchronized void start_all() {
+        if (mVision == null || mBridgeNode == null)
+        {
+            Log.d(TAG, "Cannot start_listening yet, a required service is not ready");
+            return;
+        }
+
         Log.d(TAG, "start_all() called");
         StreamInfo[] infos = mVision.getActivatedStreamInfo();
         for(StreamInfo info : infos) {
@@ -90,6 +156,12 @@ public class RealsensePublisher {
     }
 
     public synchronized void stop_all() {
+        if (mVision == null || mBridgeNode == null)
+        {
+            Log.d(TAG, "Cannot start_listening yet, a required service is not ready");
+            return;
+        }
+
         Log.d(TAG, "stop_all() called");
         StreamInfo[] streamInfos = mVision.getActivatedStreamInfo();
         for (StreamInfo info : streamInfos) {
@@ -104,9 +176,31 @@ public class RealsensePublisher {
                     break;
             }
         }
+
+        mColorStarted = false;
+        mDepthStarted = false;
+        mFisheyeStarted = false;
+    }
+
+    public synchronized void start_imu(){
+        if (mVision == null || mBridgeNode == null)
+        {
+            Log.d(TAG, "Cannot start_listening yet, a required service is not ready");
+            return;
+        }
+
+        mVision.setIMUCallback(this);
     }
 
     public synchronized void start_color(){
+        if (mVision == null || mBridgeNode == null || mColorStarted)
+        {
+            Log.d(TAG, "Cannot start_listening yet, a required service is not ready");
+            return;
+        }
+
+        mColorStarted = true;
+
         Log.d(TAG, "start_color() called");
         updateCameraInfo(2, mVision.getColorDepthCalibrationData().colorIntrinsic,
                 mRsColorWidth, mRsColorHeight);
@@ -114,6 +208,14 @@ public class RealsensePublisher {
     }
 
     public synchronized void start_depth(){
+        if (mVision == null || mBridgeNode == null || mDepthStarted)
+        {
+            Log.d(TAG, "Cannot start_listening yet, a required service is not ready");
+            return;
+        }
+
+        mDepthStarted = true;
+
         Log.d(TAG, "start_depth() called");
         updateCameraInfo(3, mVision.getColorDepthCalibrationData().depthIntrinsic,
                 mRsDepthWidth, mRsDepthHeight);
@@ -121,6 +223,14 @@ public class RealsensePublisher {
     }
 
     public synchronized void start_fisheye() {
+        if (mVision == null)
+        {
+            Log.d(TAG, "Cannot start_listening yet, a required service is not ready");
+            return;
+        }
+
+        mFisheyeStarted = true;
+
         Log.d(TAG, "start_fisheye() called");
 //        updateCameraInfo(1, mVision.getColorDepthCalibrationData().colorIntrinsic,
 //                mFisheyeWidth, mFisheyeHeight);
@@ -128,25 +238,142 @@ public class RealsensePublisher {
     }
 
     public synchronized void stop_color() {
+        if (mVision == null || !mColorStarted)
+        {
+            Log.d(TAG, "Cannot start_listening yet, a required service is not ready");
+            return;
+        }
+
         Log.d(TAG, "stop_color() called");
         mVision.stopListenFrame(StreamType.COLOR);
+
+        mColorStarted = false;
     }
 
     public synchronized void stop_depth() {
+        if (mVision == null || !mDepthStarted)
+        {
+            Log.d(TAG, "Cannot start_listening yet, a required service is not ready");
+            return;
+        }
+
         Log.d(TAG, "stop_depth() called");
         mVision.stopListenFrame(StreamType.DEPTH);
+
+        mDepthStarted = false;
     }
 
     public synchronized void stop_fisheye() {
+        if (mVision == null || !mFisheyeStarted)
+        {
+            Log.d(TAG, "Cannot start_listening yet, a required service is not ready");
+            return;
+        }
+
         Log.d(TAG, "stop_fisheye() called");
         mVision.stopListenFrame(StreamType.FISH_EYE);
+
+        mFisheyeStarted = false;
+    }
+
+    private synchronized boolean process_metadata(RealsenseMetadataSource source, FrameInfo frameInfo, Header imageHeader)
+    {
+        int currentFrame = frameInfo.getFrameNum();
+        Long currentPlatformStamp = frameInfo.getPlatformTimeStamp();
+
+        // Is there currently Realsense metadata?
+        if (mRealsenseMeta != null)
+        {
+            // Did we generate this metadata?
+            if (mRealsenseMeta.source == source)
+            {
+                // We generated this metadata, so a new frame has arrived before the other provider was able to
+                // consume it. Maybe a frame was dropped from the other camera.
+
+                // We should update the metadata here to match our current frame
+
+                if (mRealsenseMeta.frameNum == currentFrame)
+                {
+                    Log.d(TAG, "ERROR: Camera callback for " + source + " called twice for same frame!");
+                    Log.d(TAG, "Current frame is " + currentFrame + " but metadata contains frame " + mRealsenseMeta);
+                    return false;
+
+                    // TODO: this is fatal?
+                }
+                else if (mRealsenseMeta.frameNum > currentFrame)
+                {
+                    Log.d(TAG, "ERROR: Camera callback for " + source + " called twice, with an old frame!");
+                    Log.d(TAG, "Current frame is " + currentFrame + " but metadata contains frame " + mRealsenseMeta);
+                    return false;
+
+                    // TODO: this is fatal?
+                }
+                else // if (mRealsenseMeta.frameNum < currentFrame)
+                {
+                    Log.d(TAG, "WARNING: Camera callback for " + source + " detected stale metadata: other source has fallen behind!");
+                    Log.d(TAG, "Asked to process metadata for frame " + currentFrame + " but current metadata is for same source, frame " + mRealsenseMeta.frameNum);
+                    // Fall through to the end of the function where we generate new metadata
+                    // TODO: is this the right choice? what should we do about this?
+                }
+            }
+            else
+            {
+                // The other camera generated the metadata. We should validate it
+                // 3 possibilities:
+                // - The metadata matches our frame metadata exactly
+                // - Our metadata is newer
+                // - Our metadata is older
+                if (mRealsenseMeta.frameNum == currentFrame)
+                {
+                    // Consume the metadata and clear it
+                    // Set the image header
+                    imageHeader.setStamp(mRealsenseMeta.rosTime);
+                    mRealsenseMeta = null;
+                    return true;
+                }
+                else if (mRealsenseMeta.frameNum > currentFrame)
+                {
+                    // We have an old frame, and should drop it to try and catch up
+                    Log.d(TAG, "ERROR: Camera " + source + " has fallen behind. Processing frame num " + currentFrame + " but other source metadata has already processed " + mRealsenseMeta.frameNum);
+                    return false;
+                }
+                else // implied: if (mRealsenseMeta.frameNum < currentFrame)
+                {
+                    // Metadata from the other camera is old. This implies that the current source skipped a frame.
+                    Log.d(TAG, "WARNING: Camera " + source + " is ahead. Processing frame num " + currentFrame + " but other source published metadata data for old frame " + mRealsenseMeta.frameNum);
+                    // We should create new metadata for the current frame. Fall through.
+                    // TODO: is this the right choice?
+                }
+            }
+        }
+
+        // No metadata for this frame yet
+        // Get an appropriate ROS time to match the platform time of this stamp
+        Time currentRosTime = mBridgeNode.mConnectedNode.getCurrentTime();
+        Time currentSystemTime = Time.fromMillis(System.currentTimeMillis());
+        Duration rosToSystemTimeOffset = currentRosTime.subtract(currentSystemTime);
+        Time stampTime = Time.fromNano(Utils.platformStampInNano(frameInfo.getPlatformTimeStamp()));
+        Time correctedStampTime = stampTime.add(rosToSystemTimeOffset);
+
+        // Add the platform stamp / actual ROS time pair to the list of times we want TF data for
+        mDepthRosStamps.add(Pair.create(frameInfo.getPlatformTimeStamp(), correctedStampTime));
+
+        // Create Realsense metadata for this frame
+        mRealsenseMeta = new RealsenseMetadata();
+        mRealsenseMeta.source = source;
+        mRealsenseMeta.frameNum = currentFrame;
+        mRealsenseMeta.platformStamp = currentPlatformStamp;
+        mRealsenseMeta.rosTime = correctedStampTime;
+
+        // Set the image header
+        imageHeader.setStamp(correctedStampTime);
+
+        return true;
     }
 
     Vision.FrameListener mRsColorListener = new Vision.FrameListener() {
-        private double lastFrameStamp = 0.d; // in millisecond
         @Override
         public void onNewFrame(int streamType, Frame frame) {
-//            Log.d(TAG, "mRsColorListener onNewFrame...");
             if (!mIsPubRsColor) {
                 Log.d(TAG, "mRsColorListener: !mIsPubRsColor");
                 return;
@@ -160,14 +387,24 @@ public class RealsensePublisher {
                 mRsColorBitmap = Bitmap.createBitmap(mRsColorWidth, mRsColorHeight, Bitmap.Config.ARGB_8888);
             }
 
-            mRsColorBitmap.copyPixelsFromBuffer(frame.getByteBuffer()); // copy once
-
             CompressedImage image = mBridgeNode.mRsColorCompressedPubr.newMessage();
             image.setFormat("jpeg");
-//            image.getHeader().setStamp(currentTime);
-            image.getHeader().setFrameId(RsColorOpticalFrame);
 
-            mRsColorBitmap.compress(Bitmap.CompressFormat.JPEG, 100, mRsColorOutStream);
+            //Log.d(TAG, "COLOR FRAME NUM: " + frame.getInfo().getFrameNum());
+            //Log.d(TAG, "COLOR FRAME PLATFORM STAMP: " + frame.getInfo().getPlatformTimeStamp());
+
+            // If process_metadata doesn't want us to publish the frame, bail out now
+            if(!process_metadata(RealsenseMetadataSource.COLOR, frame.getInfo(), image.getHeader()))
+            {
+                Log.d(TAG, "WARNING: Skipping Color Frame " + frame.getInfo().getFrameNum());
+                return;
+            }
+
+            image.getHeader().setFrameId(mBridgeNode.RsColorOpticalFrame);
+
+            // TODO: no more compression, it's too slow
+            mRsColorBitmap.copyPixelsFromBuffer(frame.getByteBuffer()); // copy once
+            mRsColorBitmap.compress(Bitmap.CompressFormat.JPEG, 75, mRsColorOutStream);
             image.setData(mRsColorOutStream.buffer().copy());              // copy twice
 
             mRsColorOutStream.buffer().clear();
@@ -179,26 +416,31 @@ public class RealsensePublisher {
 
     Vision.FrameListener mRsDepthListener = new Vision.FrameListener() {
 
-        private double lastFrameStamp = 0.d; // in millisecond
         @Override
         public void onNewFrame(int streamType, Frame frame) {
-//            Log.d(TAG, "mRsDepthListener onNewFrame...");
             if (!mIsPubRsDepth)
                 return;
             if (streamType != StreamType.DEPTH) {
                 Log.e(TAG, "onNewFrame@mRsDepthListener: stream type not DEPTH! THIS IS A BUG");
                 return;
             }
-            mDepthStamps.add(frame.getInfo().getPlatformTimeStamp());
+
+            //Log.d(TAG, "DEPTH FRAME NUM: " + frame.getInfo().getFrameNum());
+            //Log.d(TAG, "DEPTH FRAME PLATFORM STAMP: " + frame.getInfo().getPlatformTimeStamp());
 
             Image image = mBridgeNode.mRsDepthPubr.newMessage();
             image.setWidth(mRsDepthWidth);
             image.setHeight(mRsDepthHeight);
             image.setStep(mRsDepthWidth * 2);
-            image.setEncoding("mono16");
+            image.setEncoding("16UC1");
+            image.getHeader().setFrameId(mBridgeNode.RsDepthOpticalFrame);
 
-//            image.getHeader().setStamp(currentTime);
-            image.getHeader().setFrameId(RsDepthOpticalFrame);
+            // If process_metadata doesn't want us to publish the frame, bail out now
+            if(!process_metadata(RealsenseMetadataSource.DEPTH, frame.getInfo(), image.getHeader()))
+            {
+                Log.d(TAG, "WARNING: Skipping Depth Frame " + frame.getInfo().getFrameNum());
+                return;
+            }
 
             try {
                 WritableByteChannel channel = Channels.newChannel(mRsDepthOutStream);
@@ -236,8 +478,8 @@ public class RealsensePublisher {
 
             CompressedImage image = mBridgeNode.mFisheyeCompressedPubr.newMessage();
             image.setFormat("jpeg");
-//            image.getHeader().setStamp();
-            image.getHeader().setFrameId(FisheyeOpticalFrame);
+            image.getHeader().setStamp(Time.fromNano(platformStampInNano(frame.getInfo().getPlatformTimeStamp())));
+            image.getHeader().setFrameId(mBridgeNode.FisheyeOpticalFrame);
 
             mFisheyeBitmap.compress(Bitmap.CompressFormat.JPEG, 100, mFisheyeOutStream);
             image.setData(mFisheyeOutStream.buffer().copy());              // copy twice
@@ -300,11 +542,42 @@ public class RealsensePublisher {
         k[5] = intrinsic.principal.y;
         k[8] = 1;
 
+// # Projection/camera matrix
+// #     [fx'  0  cx' Tx]
+// # P = [ 0  fy' cy' Ty]
+// #     [ 0   0   1   0]
+        double[] p = new double[12];
+
+        p[0] = intrinsic.focalLength.x;
+        p[5] = intrinsic.focalLength.y;
+        p[2] = intrinsic.principal.x;
+        p[6] = intrinsic.principal.y;
+        p[10] = 1;
+
+// # Rectification matrix (stereo cameras only)
+// # A rotation matrix aligning the camera coordinate system to the ideal
+// # stereo image plane so that epipolar lines in both stereo images are
+// # parallel.
+        double[] r = new double[9];
+        r[0] = 1;
+        r[4] = 1;
+        r[8] = 1;
+
         info.setHeader(header);
         info.setWidth(width);
         info.setHeight(height);
         info.setK(k);
+        info.setP(p);
+        info.setR(r);
 
         pubr.publish(info);
+    }
+
+
+    @Override
+    public void onNewData(ByteBuffer byteBuffer, int length, int frameCount) {
+        // TODO: what is this data
+        Log.d(TAG, "Length: " + length);
+        Log.d(TAG, "Frame Count: " + frameCount);
     }
 }
