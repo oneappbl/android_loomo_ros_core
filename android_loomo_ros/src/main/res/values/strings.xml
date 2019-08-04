@@ -1,6 +1,6 @@
-<?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">Loomo ROS</string>
+    <string name="title_activity_main">Loomo ROS</string>
     <string name="pub_rscolor">Pub RsColor:</string>
     <string name="pub_rsdepth">Pub RsDepth:</string>
     <string name="pub_fisheye">Pub Fisheye:</string>
@@ -8,5 +8,6 @@
     <string name="pub_sensor">Pub Sensor:</string>
     <string name="pub_spr">Pub Speech:</string>
     <string name="sub_motion">Sub Motion:</string>
+    <string name="sub_head">Sub Head:</string>
     <string name="kill_app_text">Kill App!</string>
 </resources>
