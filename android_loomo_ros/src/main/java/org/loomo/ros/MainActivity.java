@@ -79,13 +79,12 @@ public class MainActivity extends RosActivity implements CompoundButton.OnChecke
 
     private Button mKillAppButton;
 
-//    public NtpTimeProvider mNtpTimeProvider;
-
     private Switch mPubRsColorSwitch;
     private Switch mPubRsDepthSwitch;
     private Switch mPubFisheyeSwitch;
     private Switch mPubSensorSwitch;
     private Switch mSubMotionSwitch;
+    private Switch mSubHeadSwitch;
 
     private Switch mPubTFSwitch;
     private RealsensePublisher mRealsensePublisher;
@@ -108,10 +107,8 @@ public class MainActivity extends RosActivity implements CompoundButton.OnChecke
     // Assumes that ROS master is a different machine, with a hard-coded ROS_MASTER_URI.
     // If you'd like to be able to select the URI in the app on startup, replace
     // super( , , ) with super( , ) to start a different version of RosActivity
-    public MainActivity() { super("LoomoROS", "LoomoROS");}
-    //public MainActivity() {
-    //    super("LoomoROS", "LoomoROS", URI.create("http://192.168.43.119:11311/"));
-    //}
+    //public MainActivity() { super("LoomoROS", "LoomoROS");}
+    public MainActivity() { super("LoomoROS", "LoomoROS", URI.create("http://192.168.42.36:11311/")); }
 
     @RequiresApi(api = Build.VERSION_CODES.M)
     @Override
@@ -134,6 +131,7 @@ public class MainActivity extends RosActivity implements CompoundButton.OnChecke
         mPubTFSwitch = (Switch) findViewById(R.id.tf);
         mPubSensorSwitch = (Switch) findViewById(R.id.sensor);
         mSubMotionSwitch = (Switch) findViewById(R.id.motion);
+        mSubHeadSwitch = (Switch) findViewById(R.id.head);
 
         // Add some listeners to the states of the switches
         mPubRsColorSwitch.setOnCheckedChangeListener(this);
@@ -142,6 +140,7 @@ public class MainActivity extends RosActivity implements CompoundButton.OnChecke
         mPubTFSwitch.setOnCheckedChangeListener(this);
         mPubSensorSwitch.setOnCheckedChangeListener(this);
         mSubMotionSwitch.setOnCheckedChangeListener(this);
+        mSubHeadSwitch.setOnCheckedChangeListener(this);
 
         // Keep track of timestamps when images published, so corresponding TFs can be published too
         mDepthStamps = new ConcurrentLinkedDeque<>();
@@ -366,7 +365,9 @@ public class MainActivity extends RosActivity implements CompoundButton.OnChecke
             // All camera switches can now be toggled by the user
             mPubRsColorSwitch.setEnabled(true);
             mPubRsDepthSwitch.setEnabled(true);
-            mPubFisheyeSwitch.setEnabled(true);
+
+            // TODO: Segway does not allow using the fishey by default. Add a test for the special unlock APK.
+            mPubFisheyeSwitch.setEnabled(false);
 
             // Default switch states
             // TODO: move out of here!
@@ -376,8 +377,17 @@ public class MainActivity extends RosActivity implements CompoundButton.OnChecke
 
             mTFPublisher.start();
 
-            mRealsensePublisher.start_color();
-            mRealsensePublisher.start_depth();
+            if (mPubRsColorSwitch.isChecked()) {
+                mRealsensePublisher.start_color();
+            }
+
+            if (mPubRsDepthSwitch.isChecked()) {
+                mRealsensePublisher.start_depth();
+            }
+
+            if (mPubFisheyeSwitch.isChecked()) {
+                mRealsensePublisher.start_fisheye();
+            }
         }
 
         @Override
@@ -404,9 +414,13 @@ public class MainActivity extends RosActivity implements CompoundButton.OnChecke
             mPubSensorSwitch.setChecked(true);
 
             // Try a call to start listening, this may fail is ROS is not started yet (which is fine)
-            // TODO: check state of checkbox
-            mTFPublisher.start();
-            mSensorPublisher.start();
+            if(mPubTFSwitch.isChecked()) {
+                mTFPublisher.start();
+            }
+
+            if(mPubSensorSwitch.isChecked()) {
+                mSensorPublisher.start();
+            }
         }
 
         @Override
@@ -424,8 +438,13 @@ public class MainActivity extends RosActivity implements CompoundButton.OnChecke
 
             // Try a call to start listening, this may fail is ROS is not started yet (which is fine)
             // TODO: check state of checkbox
-            mLocomotionSubscriber.start();
-            mTFPublisher.start();
+            if(mSubMotionSwitch.isChecked()) {
+                mLocomotionSubscriber.start();
+            }
+
+            if (mPubTFSwitch.isChecked()) {
+                mTFPublisher.start();
+            }
         }
 
         @Override
@@ -442,7 +461,9 @@ public class MainActivity extends RosActivity implements CompoundButton.OnChecke
 
             // Try a call to start listening, this may fail is ROS is not started yet (which is fine)
             // TODO: check state of checkbox
-            mHeadSubscriber.start();
+            if(mSubHeadSwitch.isChecked()) {
+                mHeadSubscriber.start();
+            }
         }
 
         @Override
