@@ -1,6 +1,5 @@
 package org.loomo.ros;
 
-import android.os.Handler;
 import android.util.Log;
 
 import com.segway.robot.sdk.perception.sensor.InfraredData;
@@ -30,8 +29,7 @@ public class SensorPublisher implements LoomoRosBridgeConsumer {
     public SensorPublisher() {
     }
 
-    public void loomo_started(Sensor mSensor)
-    {
+    public void loomo_started(Sensor mSensor) {
         this.mSensor = mSensor;
     }
 
@@ -42,9 +40,11 @@ public class SensorPublisher implements LoomoRosBridgeConsumer {
 
     @Override
     public void start() {
-        if (mSensor == null || mBridgeNode == null || mIsStarted)
-        {
+        if (mSensor == null || mBridgeNode == null) {
             Log.d(TAG, "Cannot start_listening yet, a required service is not ready");
+            return;
+        } else if (mIsStarted) {
+            Log.d(TAG, "already started");
             return;
         }
 
@@ -59,9 +59,8 @@ public class SensorPublisher implements LoomoRosBridgeConsumer {
 
     @Override
     public void stop() {
-        if (!mIsStarted)
-        {
-            Log.d(TAG, "Cannot stop without starting");
+        if (!mIsStarted) {
+            Log.d(TAG, "not started");
             return;
         }
 
@@ -82,14 +81,13 @@ public class SensorPublisher implements LoomoRosBridgeConsumer {
             super.run();
 
             while (null != mSensor) {
-
                 // No metadata for this frame yet
                 // Get an appropriate ROS time to match the platform time of this stamp
                 Time currentRosTime = mBridgeNode.mConnectedNode.getCurrentTime();
                 Time currentSystemTime = Time.fromMillis(System.currentTimeMillis());
                 Duration rosToSystemTimeOffset = currentRosTime.subtract(currentSystemTime);
 
-                if (mBridgeNode.should_pub_ultrasonic){
+                if (mBridgeNode.should_pub_ultrasonic) {
                     SensorData mUltrasonicData = mSensor.querySensorData(Arrays.asList(Sensor.ULTRASONIC_BODY)).get(0);
                     float mUltrasonicDistance = mUltrasonicData.getIntData()[0];
                     Range ultrasonicMessage = mBridgeNode.mUltrasonicPubr.newMessage();
@@ -107,8 +105,7 @@ public class SensorPublisher implements LoomoRosBridgeConsumer {
                     ultrasonicMessage.setMaxRange(1.5f);    // Max range is 1500m
 
                     // Clamp ultrasonic data to max range (ROS requires this)
-                    if (mUltrasonicDistance > 1500)
-                    {
+                    if (mUltrasonicDistance > 1500) {
                         mUltrasonicDistance = 1500;
                     }
 
@@ -116,7 +113,6 @@ public class SensorPublisher implements LoomoRosBridgeConsumer {
                     mBridgeNode.mUltrasonicPubr.publish(ultrasonicMessage);
                 }
                 if (mBridgeNode.should_pub_infrared) {
-
                     InfraredData infraredData = mSensor.getInfraredDistance();
 
                     float mInfraredDistanceLeft = infraredData.getLeftDistance();
@@ -157,7 +153,6 @@ public class SensorPublisher implements LoomoRosBridgeConsumer {
                     basePitchMessage.setData(mBasePitch);
                     mBridgeNode.mBasePitchPubr.publish(basePitchMessage);
                 }
-
             }
         }
     }

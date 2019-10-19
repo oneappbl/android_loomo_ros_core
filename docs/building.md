@@ -14,3 +14,7 @@ Open the project in Android Studio. It should automatically configure the projec
 Click Build -> Make Project. Android Studio should build the project and produce an apk that can be installed on Loomo.
 
 There's nothing more to it: ROS does not need to be installed to build this project as all the dependencies are pulled down via rosjava.
+
+### ROS Java
+
+The code in this repo makes use of lot of code from [ROSJave](https://github.com/rosjava). This is useful to know when it comes to debugging.

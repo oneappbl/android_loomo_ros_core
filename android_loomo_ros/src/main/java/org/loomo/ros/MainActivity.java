@@ -16,36 +16,25 @@
 
 package org.loomo.ros;
 
-import android.Manifest;
-import android.content.pm.PackageManager;
-import android.location.Criteria;
-import android.location.Location;
 import android.location.LocationManager;
-import android.location.LocationProvider;
 import android.os.Build;
 import android.os.Bundle;
 import android.util.Log;
 import android.util.Pair;
-import android.view.KeyEvent;
-import android.view.MotionEvent;
 import android.view.View;
 import android.view.Window;
 import android.view.WindowManager;
+import android.widget.Button;
 import android.widget.CompoundButton;
 import android.widget.Switch;
-import android.widget.Button;
 
 import androidx.annotation.RequiresApi;
-import androidx.core.content.ContextCompat;
 
-import com.google.android.gms.location.FusedLocationProviderClient;
-import com.google.android.gms.location.LocationServices;
-import com.google.android.gms.tasks.OnSuccessListener;
 import com.segway.robot.sdk.base.bind.ServiceBinder;
+import com.segway.robot.sdk.locomotion.head.Head;
+import com.segway.robot.sdk.locomotion.sbv.Base;
 import com.segway.robot.sdk.perception.sensor.Sensor;
 import com.segway.robot.sdk.vision.Vision;
-import com.segway.robot.sdk.locomotion.sbv.Base;
-import com.segway.robot.sdk.locomotion.head.Head;
 
 import org.ros.address.InetAddressFactory;
 import org.ros.android.RosActivity;
@@ -55,9 +44,7 @@ import org.ros.node.NodeMainExecutor;
 import org.ros.time.NtpTimeProvider;
 
 import java.net.URI;
-import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.List;
 import java.util.Queue;
 import java.util.concurrent.ConcurrentLinkedDeque;
@@ -92,6 +79,8 @@ public class MainActivity extends RosActivity implements CompoundButton.OnChecke
     private LocomotionSubscriber mLocomotionSubscriber;
     private HeadSubscriber mHeadSubscriber;
 
+    public NtpTimeProvider mNtpProvider;
+
     private List<LoomoRosBridgeConsumer> mRosBridgeConsumers;
 
     private SensorPublisher mSensorPublisher;
@@ -107,8 +96,12 @@ public class MainActivity extends RosActivity implements CompoundButton.OnChecke
     // Assumes that ROS master is a different machine, with a hard-coded ROS_MASTER_URI.
     // If you'd like to be able to select the URI in the app on startup, replace
     // super( , , ) with super( , ) to start a different version of RosActivity
-    //public MainActivity() { super("LoomoROS", "LoomoROS");}
-    public MainActivity() { super("LoomoROS", "LoomoROS", URI.create("http://192.168.42.36:11311/")); }
+    //public MainActivity() {
+    //     super("LoomoROS", "LoomoROS");
+    // }
+    public MainActivity() {
+        super("LoomoROS", "LoomoROS", URI.create("http://192.168.42.102:11311/"));
+    }
 
     @RequiresApi(api = Build.VERSION_CODES.M)
     @Override
@@ -174,45 +167,44 @@ public class MainActivity extends RosActivity implements CompoundButton.OnChecke
         mHead = Head.getInstance();
         mHead.bindService(this, mBindHeadListener);
 
-        // GPS
-       /* if (ContextCompat.checkSelfPermission(getApplicationContext(), Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
-            // TODO: Consider calling
-            //    Activity#requestPermissions
-            // here to request the missing permissions, and then overriding
-            //   public void onRequestPermissionsResult(int requestCode, String[] permissions,
-            //                                          int[] grantResults)
-            // to handle the case where the user grants the permission. See the documentation
-            // for Activity#requestPermissions for more details.
-            Log.e(TAG, "NO GPS PERMISSION");
-            return;
-        }
-        else
-        {
-            Log.d(TAG, "GPS PERMISSION ACQUIRED");
-        }
-
-        mLocationManager = (LocationManager) getApplicationContext().getSystemService(LOCATION_SERVICE);
-        List<String> providers = mLocationManager.getProviders(true);
-
-        if (!providers.contains(LocationManager.GPS_PROVIDER))
-        {
-            Log.e(TAG, "No GPS provider available");
-        }
-
-
-        Location location = mLocationManager.getLastKnownLocation(LocationManager.GPS_PROVIDER);
-
-        if (location != null) {
-            Log.d(TAG, location.toString());
-        } */
+//        // GPS
+//       if (ContextCompat.checkSelfPermission(getApplicationContext(), Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
+//            // TODO: Consider calling
+//            //    Activity#requestPermissions
+//            // here to request the missing permissions, and then overriding
+//            //   public void onRequestPermissionsResult(int requestCode, String[] permissions,
+//            //                                          int[] grantResults)
+//            // to handle the case where the user grants the permission. See the documentation
+//            // for Activity#requestPermissions for more details.
+//            Log.e(TAG, "NO GPS PERMISSION");
+//            return;
+//        }
+//        else
+//        {
+//            Log.d(TAG, "GPS PERMISSION ACQUIRED");
+//        }
+//
+//        mLocationManager = (LocationManager) getApplicationContext().getSystemService(LOCATION_SERVICE);
+//        List<String> providers = mLocationManager.getProviders(true);
+//
+//        if (!providers.contains(LocationManager.GPS_PROVIDER))
+//        {
+//            Log.e(TAG, "No GPS provider available");
+//        }
+//
+//
+//        Location location = mLocationManager.getLastKnownLocation(LocationManager.GPS_PROVIDER);
+//
+//        if (location != null) {
+//            Log.d(TAG, location.toString());
+//        }
     }
 
     Runnable mOnNodeStarted = new Runnable() {
         @Override
         public void run() {
             // Node has started, so we can now tell publishers and subscribers that ROS has initialized
-            for(LoomoRosBridgeConsumer consumer : mRosBridgeConsumers)
-            {
+            for(LoomoRosBridgeConsumer consumer : mRosBridgeConsumers) {
                 consumer.node_started(mBridgeNode);
 
                 // Try a call to start listening, this may fail if the Loomo SDK is not started yet (which is fine)
@@ -278,7 +270,7 @@ public class MainActivity extends RosActivity implements CompoundButton.OnChecke
         try {
             ntpTimeProvider.updateTime();
         }
-        catch (Exception e){
+        catch (Exception e) {
             Log.d(TAG, "exception when updating time...");
         }
         Log.d(TAG, "master uri: " + getMasterUri().getHost());
@@ -350,7 +342,6 @@ public class MainActivity extends RosActivity implements CompoundButton.OnChecke
                 } else {
                     mLocomotionSubscriber.stop();
                 }
-
         }
     }
 
@@ -436,6 +427,16 @@ public class MainActivity extends RosActivity implements CompoundButton.OnChecke
             mLocomotionSubscriber.loomo_started(mBase);
             mTFPublisher.loomo_started(mBase);
 
+            Log.d(TAG, "bindLocomotion enabling motion switches.");
+
+            // All motion switches can now be toggled by the user
+            mSubMotionSwitch.setEnabled(true);
+
+            // Default switch states
+            // TODO: move out of here!
+            mSubMotionSwitch.setChecked(true);
+
+
             // Try a call to start listening, this may fail is ROS is not started yet (which is fine)
             // TODO: check state of checkbox
             if(mSubMotionSwitch.isChecked()) {
@@ -459,6 +460,13 @@ public class MainActivity extends RosActivity implements CompoundButton.OnChecke
             Log.d(TAG, "mBindHeadListener onBind() called");
             mHeadSubscriber.loomo_started(mHead);
 
+            // All head switches can now be toggled by the user
+            mSubHeadSwitch.setEnabled(true);
+
+            // Default switch states
+            // TODO: move out of here!
+            mSubHeadSwitch.setChecked(true);
+
             // Try a call to start listening, this may fail is ROS is not started yet (which is fine)
             // TODO: check state of checkbox
             if(mSubHeadSwitch.isChecked()) {
@@ -474,8 +482,11 @@ public class MainActivity extends RosActivity implements CompoundButton.OnChecke
 
     @Override
     public void onClick(View view) {
-        Log.d(TAG, "recreating main activity to restart ROS");
-        this.recreate();
+        //Log.d(TAG, "recreating main activity to restart ROS");
+        //this.recreate();
+        moveTaskToBack(true);
+        android.os.Process.killProcess(android.os.Process.myPid());
+        System.exit(1);
     }
 
 }

@@ -2,8 +2,6 @@ package org.loomo.ros;
 
 import android.util.Log;
 
-import com.segway.robot.sdk.perception.sensor.Sensor;
-
 import org.ros.message.MessageFactory;
 import org.ros.namespace.GraphName;
 import org.ros.node.AbstractNodeMain;
@@ -11,18 +9,15 @@ import org.ros.node.ConnectedNode;
 import org.ros.node.Node;
 import org.ros.node.topic.Publisher;
 import org.ros.node.topic.Subscriber;
-import org.ros.message.MessageListener;
-import org.ros.time.NtpTimeProvider;
 
+import geometry_msgs.Twist;
 import nav_msgs.Odometry;
 import sensor_msgs.CameraInfo;
 import sensor_msgs.CompressedImage;
 import sensor_msgs.Image;
 import sensor_msgs.Range;
 import std_msgs.Float32;
-import std_msgs.Int8;
 import tf2_msgs.TFMessage;
-import geometry_msgs.Twist;
 
 public class LoomoRosBridgeNode extends AbstractNodeMain {
     private static final String TAG = "LoomoRosBridgeNode";
@@ -51,10 +46,7 @@ public class LoomoRosBridgeNode extends AbstractNodeMain {
     public Publisher<Float32> mBasePitchPubr;
     public Publisher<Odometry> mOdometryPubr;
 
-    public Subscriber<Int8> mTransformSubr;
     public Subscriber<Twist> mCmdVelSubr;
-
-    public NtpTimeProvider mNtpProvider;
 
     public String node_name = "loomo_ros_bridge_node";
     public String tf_prefix = "LO01";
@@ -63,13 +55,11 @@ public class LoomoRosBridgeNode extends AbstractNodeMain {
     public boolean should_pub_base_pitch = true;
     public boolean use_tf_prefix = true;
 
-    private boolean is_started = false;
     private Runnable mOnStarted;
     private Runnable mOnShutdown;
 
     public LoomoRosBridgeNode(Runnable onStarted, Runnable onShutdown) {
         super();
-//        this.mNtpProvider = ntpTimeProvider;
         Log.d(TAG, "Created instance of LoomoRosBridgeNode().");
         mOnStarted = onStarted;
         mOnShutdown = onShutdown;
@@ -77,18 +67,18 @@ public class LoomoRosBridgeNode extends AbstractNodeMain {
 
     @Override
     public void onStart(ConnectedNode connectedNode) {
-        Log.d(TAG, "onStart()");
         super.onStart(connectedNode);
 
-        Log.d(TAG, "onStart() creating publishers.");
+        Log.d(TAG, "onStart()");
+
         mConnectedNode = connectedNode;
         mMessageFactory = connectedNode.getTopicMessageFactory();
 
-        if (use_tf_prefix == false){
+        if (use_tf_prefix == false) {
             tf_prefix = "";
         }
 
-        if (use_tf_prefix){
+        if (use_tf_prefix) {
             RsDepthOpticalFrame = tf_prefix + "_" + RsDepthOpticalFrame;
             RsColorOpticalFrame = tf_prefix + "_" + RsColorOpticalFrame;
             FisheyeOpticalFrame = tf_prefix + "_" + FisheyeOpticalFrame;
@@ -116,9 +106,6 @@ public class LoomoRosBridgeNode extends AbstractNodeMain {
         // Subscribe to commanded twist msgs (e.g. from joystick or autonomous driving software)
         mCmdVelSubr = mConnectedNode.newSubscriber(tf_prefix+"/cmd_vel", Twist._TYPE);
 
-        // Subscribe to a topic instructing the loomo to change modes
-        mTransformSubr = mConnectedNode.newSubscriber(tf_prefix+"/mode", Int8._TYPE);
-
         mOnStarted.run();
     }
 
@@ -136,6 +123,7 @@ public class LoomoRosBridgeNode extends AbstractNodeMain {
 
     @Override
     public void onError(Node node, Throwable throwable) {
+        Log.e(TAG, "Error HERE", throwable);
         super.onError(node, throwable);
     }
 
@@ -146,5 +134,4 @@ public class LoomoRosBridgeNode extends AbstractNodeMain {
         }
         return GraphName.of(node_name);
     }
-
 }

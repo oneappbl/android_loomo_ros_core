@@ -1,8 +1,5 @@
 package org.loomo.ros;
 
-import org.ros.message.Duration;
-import org.ros.message.Time;
-
 /**
  * Created by kai on 17-11-2.
  */
@@ -21,5 +18,4 @@ public class Utils {
     public static long platformStampInNano(long stamp) {
         return (stamp * 1000);
     }
-
 }

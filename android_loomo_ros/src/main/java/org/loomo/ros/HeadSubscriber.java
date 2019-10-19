@@ -2,7 +2,6 @@ package org.loomo.ros;
 
 import android.util.Log;
 
-import org.ros.message.MessageListener;
 import com.segway.robot.sdk.locomotion.head.Head;
 
 public class HeadSubscriber implements LoomoRosBridgeConsumer {
@@ -35,25 +34,25 @@ public class HeadSubscriber implements LoomoRosBridgeConsumer {
     };
     */
 
-    public HeadSubscriber(){
+    public HeadSubscriber() {
     }
 
     @Override
-    public void node_started(LoomoRosBridgeNode mBridgeNode)
-    {
+    public void node_started(LoomoRosBridgeNode mBridgeNode) {
         this.mBridgeNode = mBridgeNode;
     }
 
-    public void loomo_started(Head mHead)
-    {
+    public void loomo_started(Head mHead) {
         this.mHead = mHead;
     }
 
     @Override
-    public void start(){
-        if (mHead == null || mBridgeNode == null || mIsStarted)
-        {
+    public void start() {
+        if (mHead == null || mBridgeNode == null) {
             Log.d(TAG, "Cannot start_listening yet, a required service is not ready");
+            return;
+        } else if (mIsStarted) {
+            Log.d(TAG, "already started");
             return;
         }
 
@@ -64,28 +63,31 @@ public class HeadSubscriber implements LoomoRosBridgeConsumer {
         mHead.setHeadJointYaw(0.0f);
 
         Log.d(TAG, "start_sensor()");
-        if (mHeadMotionThread == null) {
-            mHeadMotionThread = new HeadMotionThread();
-        }
-
-        mThreadRunning = true; // Allow the thread to execute
-        mHeadMotionThread.start();
+//        if (mHeadMotionThread == null) {
+//            mHeadMotionThread = new HeadMotionThread();
+//
+//            mThreadRunning = true; // Allow the thread to execute
+//            mHeadMotionThread.start();
+//        }
 
         mHead.setHeadLightMode(8);
     }
 
     @Override
-    public void stop(){
+    public void stop() {
         if (!mIsStarted) {
+            Log.d(TAG, "not started");
             return;
         }
 
         Log.d(TAG, "stop_head()");
         try {
-            mThreadRunning = false;
-            mHeadMotionThread.interrupt();
-            mHeadMotionThread.join();
-            mHeadMotionThread = null;
+            if (mThreadRunning) {
+                mThreadRunning = false;
+                mHeadMotionThread.interrupt();
+                mHeadMotionThread.join();
+                mHeadMotionThread = null;
+            }
         } catch (InterruptedException e) {
             Log.w(TAG, "onUnbind: mHeadMotionThread.join() ", e);
         }
@@ -96,7 +98,6 @@ public class HeadSubscriber implements LoomoRosBridgeConsumer {
     private class HeadMotionThread extends Thread {
         @Override
         public void run() {
-
             while(mHead != null && mThreadRunning) {
                 // Set head pose to 45 degrees, left
                 mHead.setHeadJointYaw((float) (30.0f * (Math.PI / 180.0f)));

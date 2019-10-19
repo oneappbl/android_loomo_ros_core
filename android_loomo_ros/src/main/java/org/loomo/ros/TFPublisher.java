@@ -1,42 +1,31 @@
 package org.loomo.ros;
 
-import android.os.Handler;
 import android.util.Log;
 import android.util.Pair;
 
-import java.util.Arrays;
-import java.util.List;
-import java.util.Queue;
-
+import com.segway.robot.algo.tf.AlgoTfData;
 import com.segway.robot.sdk.locomotion.sbv.AngularVelocity;
 import com.segway.robot.sdk.locomotion.sbv.Base;
 import com.segway.robot.sdk.locomotion.sbv.LinearVelocity;
 import com.segway.robot.sdk.perception.sensor.Sensor;
-
-import org.ros.message.Duration;
-import org.ros.message.Time;
-
-
-import com.segway.robot.algo.tf.AlgoTfData;
 import com.segway.robot.sdk.vision.Vision;
 import com.segway.robot.sdk.vision.calibration.ColorDepthCalibration;
 import com.segway.robot.sdk.vision.calibration.Extrinsic;
 import com.segway.robot.sdk.vision.calibration.MotionModuleCalibration;
 
-import geometry_msgs.Point;
-import geometry_msgs.Pose;
-import geometry_msgs.PoseWithCovariance;
+import org.ros.message.Duration;
+import org.ros.message.Time;
+
+import java.util.Arrays;
+import java.util.List;
+import java.util.Queue;
+
 import geometry_msgs.Quaternion;
 import geometry_msgs.Transform;
 import geometry_msgs.TransformStamped;
-import geometry_msgs.Twist;
-import geometry_msgs.TwistWithCovariance;
 import geometry_msgs.Vector3;
 import nav_msgs.Odometry;
-import std_msgs.Header;
 import tf2_msgs.TFMessage;
-
-import static org.loomo.ros.Utils.platformStampInNano;
 
 /**
  * Created by mfe on 7/17/18.
@@ -59,22 +48,20 @@ public class TFPublisher implements LoomoRosBridgeConsumer {
 
     private boolean mStarted = false;
 
-
     public TFPublisher(Queue<Long> mDepthStamps, Queue<Pair<Long, Time>> mDepthRosStamps) {
         this.mDepthStamps = mDepthStamps;
         this.mDepthRosStamps = mDepthRosStamps;
     }
 
-    public void loomo_started(Sensor mSensor)
-    {
+    public void loomo_started(Sensor mSensor) {
         this.mSensor = mSensor;
     }
-    public void loomo_started(Vision mVision)
-    {
+
+    public void loomo_started(Vision mVision) {
         this.mVision = mVision;
     }
-    public void loomo_started(Base mBase)
-    {
+
+    public void loomo_started(Base mBase) {
         this.mBase = mBase;
     }
 
@@ -85,11 +72,15 @@ public class TFPublisher implements LoomoRosBridgeConsumer {
 
     @Override
     public void start() {
-        if (mSensor == null || mVision == null || mBridgeNode == null || mBase == null || mStarted)
-        {
+        if (mSensor == null || mVision == null || mBridgeNode == null || mBase == null) {
             Log.d(TAG, "Cannot start_listening yet, a required service is not ready");
             return;
+        } else if (mStarted) {
+            Log.d(TAG, "already started");
+            return;
         }
+
+        mStarted = true;
 
         mDepthCalibration = mVision.getColorDepthCalibrationData();
         mMotionCalibration = mVision.getMotionModuleCalibrationData();
@@ -178,8 +169,7 @@ public class TFPublisher implements LoomoRosBridgeConsumer {
         return transformStamped;
     }
 
-    private Transform staticFullTransform(float t_x, float t_y, float t_z, float q_x, float q_y, float q_z, float q_w)
-    {
+    private Transform staticFullTransform(float t_x, float t_y, float t_z, float q_x, float q_y, float q_z, float q_w) {
         Vector3 vector3 = mBridgeNode.mMessageFactory.newFromType(Vector3._TYPE);
         vector3.setX(t_x);
         vector3.setY(t_y);
@@ -198,14 +188,12 @@ public class TFPublisher implements LoomoRosBridgeConsumer {
         return transform;
     }
 
-    private Transform staticTranslationTransform(float x, float y, float z)
-    {
+    private Transform staticTranslationTransform(float x, float y, float z) {
         org.ros.rosjava_geometry.Quaternion identity_quaternion = org.ros.rosjava_geometry.Quaternion.identity();
         return staticFullTransform(x, y, z, (float)identity_quaternion.getX(), (float)identity_quaternion.getY(), (float)identity_quaternion.getZ(), (float)identity_quaternion.getW());
     }
 
-    private TransformStamped baseLinkToNeckTransform(Time time)
-    {
+    private TransformStamped baseLinkToNeckTransform(Time time) {
         TransformStamped transformStamped = mBridgeNode.mMessageFactory.newFromType(TransformStamped._TYPE);
 
         // Neck is approx 50cm above the base

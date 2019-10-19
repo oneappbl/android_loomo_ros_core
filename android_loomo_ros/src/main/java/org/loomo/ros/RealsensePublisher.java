@@ -5,10 +5,7 @@ import android.util.Log;
 import android.util.Pair;
 
 import com.segway.robot.sdk.vision.Vision;
-import com.segway.robot.sdk.vision.calibration.ColorDepthCalibration;
-import com.segway.robot.sdk.vision.calibration.Extrinsic;
 import com.segway.robot.sdk.vision.calibration.Intrinsic;
-import com.segway.robot.sdk.vision.calibration.MotionModuleCalibration;
 import com.segway.robot.sdk.vision.frame.Frame;
 import com.segway.robot.sdk.vision.frame.FrameInfo;
 import com.segway.robot.sdk.vision.imu.IMUDataCallback;
@@ -25,21 +22,14 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.channels.Channels;
 import java.nio.channels.WritableByteChannel;
-import java.util.concurrent.ConcurrentLinkedDeque;
+import java.util.Queue;
 
-import geometry_msgs.Quaternion;
-import geometry_msgs.Transform;
-import geometry_msgs.TransformStamped;
-import geometry_msgs.Vector3;
 import sensor_msgs.CameraInfo;
 import sensor_msgs.CompressedImage;
 import sensor_msgs.Image;
 import std_msgs.Header;
 
-import java.util.Queue;
-
 import static org.loomo.ros.Utils.platformStampInNano;
-import static org.loomo.ros.Utils.platformStampToSecond;
 
 
 /**
@@ -59,7 +49,6 @@ public class RealsensePublisher implements LoomoRosBridgeConsumer, IMUDataCallba
         Long platformStamp;
         Time rosTime;
         RealsenseMetadataSource source;
-
     }
 
     public static final String TAG = "RealsensePublisher";
@@ -101,8 +90,7 @@ public class RealsensePublisher implements LoomoRosBridgeConsumer, IMUDataCallba
         mFisheyeOutStream = new ChannelBufferOutputStream(MessageBuffers.dynamicBuffer());
     }
 
-    public void node_started(LoomoRosBridgeNode mBridgeNode)
-    {
+    public void node_started(LoomoRosBridgeNode mBridgeNode) {
         this.mBridgeNode = mBridgeNode;
     }
 
@@ -110,8 +98,7 @@ public class RealsensePublisher implements LoomoRosBridgeConsumer, IMUDataCallba
     public void start() {
         // No generic initialization is required
 
-        if (mBridgeNode == null || mVision == null)
-        {
+        if (mBridgeNode == null || mVision == null) {
             Log.d(TAG, "Cannot start RealsensePublisher, ROS or Loomo SDK is not ready");
             return;
         }
@@ -130,8 +117,7 @@ public class RealsensePublisher implements LoomoRosBridgeConsumer, IMUDataCallba
     }
 
     public synchronized void start_all() {
-        if (mVision == null || mBridgeNode == null)
-        {
+        if (mVision == null || mBridgeNode == null) {
             Log.d(TAG, "Cannot start_listening yet, a required service is not ready");
             return;
         }
@@ -156,8 +142,7 @@ public class RealsensePublisher implements LoomoRosBridgeConsumer, IMUDataCallba
     }
 
     public synchronized void stop_all() {
-        if (mVision == null || mBridgeNode == null)
-        {
+        if (mVision == null || mBridgeNode == null) {
             Log.d(TAG, "Cannot start_listening yet, a required service is not ready");
             return;
         }
@@ -182,9 +167,8 @@ public class RealsensePublisher implements LoomoRosBridgeConsumer, IMUDataCallba
         mFisheyeStarted = false;
     }
 
-    public synchronized void start_imu(){
-        if (mVision == null || mBridgeNode == null)
-        {
+    public synchronized void start_imu() {
+        if (mVision == null || mBridgeNode == null) {
             Log.d(TAG, "Cannot start_listening yet, a required service is not ready");
             return;
         }
@@ -192,10 +176,12 @@ public class RealsensePublisher implements LoomoRosBridgeConsumer, IMUDataCallba
         mVision.setIMUCallback(this);
     }
 
-    public synchronized void start_color(){
-        if (mVision == null || mBridgeNode == null || mColorStarted)
-        {
+    public synchronized void start_color() {
+        if (mVision == null || mBridgeNode == null) {
             Log.d(TAG, "Cannot start_listening yet, a required service is not ready");
+            return;
+        } else if (mColorStarted) {
+            Log.d(TAG, "already started");
             return;
         }
 
@@ -207,10 +193,12 @@ public class RealsensePublisher implements LoomoRosBridgeConsumer, IMUDataCallba
         mVision.startListenFrame(StreamType.COLOR, mRsColorListener);
     }
 
-    public synchronized void start_depth(){
-        if (mVision == null || mBridgeNode == null || mDepthStarted)
-        {
+    public synchronized void start_depth() {
+        if (mVision == null || mBridgeNode == null) {
             Log.d(TAG, "Cannot start_listening yet, a required service is not ready");
+            return;
+        } else if (mDepthStarted) {
+            Log.d(TAG, "already started");
             return;
         }
 
@@ -223,8 +211,7 @@ public class RealsensePublisher implements LoomoRosBridgeConsumer, IMUDataCallba
     }
 
     public synchronized void start_fisheye() {
-        if (mVision == null)
-        {
+        if (mVision == null) {
             Log.d(TAG, "Cannot start_listening yet, a required service is not ready");
             return;
         }
@@ -238,8 +225,7 @@ public class RealsensePublisher implements LoomoRosBridgeConsumer, IMUDataCallba
     }
 
     public synchronized void stop_color() {
-        if (mVision == null || !mColorStarted)
-        {
+        if (mVision == null || !mColorStarted) {
             Log.d(TAG, "Cannot start_listening yet, a required service is not ready");
             return;
         }
@@ -251,8 +237,7 @@ public class RealsensePublisher implements LoomoRosBridgeConsumer, IMUDataCallba
     }
 
     public synchronized void stop_depth() {
-        if (mVision == null || !mDepthStarted)
-        {
+        if (mVision == null || !mDepthStarted) {
             Log.d(TAG, "Cannot start_listening yet, a required service is not ready");
             return;
         }
@@ -264,8 +249,7 @@ public class RealsensePublisher implements LoomoRosBridgeConsumer, IMUDataCallba
     }
 
     public synchronized void stop_fisheye() {
-        if (mVision == null || !mFisheyeStarted)
-        {
+        if (mVision == null || !mFisheyeStarted) {
             Log.d(TAG, "Cannot start_listening yet, a required service is not ready");
             return;
         }
@@ -282,63 +266,49 @@ public class RealsensePublisher implements LoomoRosBridgeConsumer, IMUDataCallba
         Long currentPlatformStamp = frameInfo.getPlatformTimeStamp();
 
         // Is there currently Realsense metadata?
-        if (mRealsenseMeta != null)
-        {
+        if (mRealsenseMeta != null) {
             // Did we generate this metadata?
-            if (mRealsenseMeta.source == source)
-            {
+            if (mRealsenseMeta.source == source) {
                 // We generated this metadata, so a new frame has arrived before the other provider was able to
                 // consume it. Maybe a frame was dropped from the other camera.
 
                 // We should update the metadata here to match our current frame
 
-                if (mRealsenseMeta.frameNum == currentFrame)
-                {
+                if (mRealsenseMeta.frameNum == currentFrame) {
                     Log.d(TAG, "ERROR: Camera callback for " + source + " called twice for same frame!");
                     Log.d(TAG, "Current frame is " + currentFrame + " but metadata contains frame " + mRealsenseMeta);
                     return false;
 
                     // TODO: this is fatal?
-                }
-                else if (mRealsenseMeta.frameNum > currentFrame)
-                {
+                } else if (mRealsenseMeta.frameNum > currentFrame) {
                     Log.d(TAG, "ERROR: Camera callback for " + source + " called twice, with an old frame!");
                     Log.d(TAG, "Current frame is " + currentFrame + " but metadata contains frame " + mRealsenseMeta);
                     return false;
 
                     // TODO: this is fatal?
-                }
-                else // if (mRealsenseMeta.frameNum < currentFrame)
-                {
+                } else /* if (mRealsenseMeta.frameNum < currentFrame) */ {
                     Log.d(TAG, "WARNING: Camera callback for " + source + " detected stale metadata: other source has fallen behind!");
                     Log.d(TAG, "Asked to process metadata for frame " + currentFrame + " but current metadata is for same source, frame " + mRealsenseMeta.frameNum);
                     // Fall through to the end of the function where we generate new metadata
                     // TODO: is this the right choice? what should we do about this?
                 }
-            }
-            else
-            {
+            } else {
                 // The other camera generated the metadata. We should validate it
                 // 3 possibilities:
                 // - The metadata matches our frame metadata exactly
                 // - Our metadata is newer
                 // - Our metadata is older
-                if (mRealsenseMeta.frameNum == currentFrame)
-                {
+                if (mRealsenseMeta.frameNum == currentFrame) {
                     // Consume the metadata and clear it
                     // Set the image header
                     imageHeader.setStamp(mRealsenseMeta.rosTime);
                     mRealsenseMeta = null;
                     return true;
-                }
-                else if (mRealsenseMeta.frameNum > currentFrame)
-                {
+                } else if (mRealsenseMeta.frameNum > currentFrame) {
                     // We have an old frame, and should drop it to try and catch up
                     Log.d(TAG, "ERROR: Camera " + source + " has fallen behind. Processing frame num " + currentFrame + " but other source metadata has already processed " + mRealsenseMeta.frameNum);
                     return false;
-                }
-                else // implied: if (mRealsenseMeta.frameNum < currentFrame)
-                {
+                } else /* implied: if (mRealsenseMeta.frameNum < currentFrame) */ {
                     // Metadata from the other camera is old. This implies that the current source skipped a frame.
                     Log.d(TAG, "WARNING: Camera " + source + " is ahead. Processing frame num " + currentFrame + " but other source published metadata data for old frame " + mRealsenseMeta.frameNum);
                     // We should create new metadata for the current frame. Fall through.
@@ -394,8 +364,7 @@ public class RealsensePublisher implements LoomoRosBridgeConsumer, IMUDataCallba
             //Log.d(TAG, "COLOR FRAME PLATFORM STAMP: " + frame.getInfo().getPlatformTimeStamp());
 
             // If process_metadata doesn't want us to publish the frame, bail out now
-            if(!process_metadata(RealsenseMetadataSource.COLOR, frame.getInfo(), image.getHeader()))
-            {
+            if(!process_metadata(RealsenseMetadataSource.COLOR, frame.getInfo(), image.getHeader())) {
                 Log.d(TAG, "WARNING: Skipping Color Frame " + frame.getInfo().getFrameNum());
                 return;
             }
@@ -418,8 +387,10 @@ public class RealsensePublisher implements LoomoRosBridgeConsumer, IMUDataCallba
 
         @Override
         public void onNewFrame(int streamType, Frame frame) {
-            if (!mIsPubRsDepth)
+            if (!mIsPubRsDepth) {
                 return;
+            }
+
             if (streamType != StreamType.DEPTH) {
                 Log.e(TAG, "onNewFrame@mRsDepthListener: stream type not DEPTH! THIS IS A BUG");
                 return;
@@ -436,8 +407,7 @@ public class RealsensePublisher implements LoomoRosBridgeConsumer, IMUDataCallba
             image.getHeader().setFrameId(mBridgeNode.RsDepthOpticalFrame);
 
             // If process_metadata doesn't want us to publish the frame, bail out now
-            if(!process_metadata(RealsenseMetadataSource.DEPTH, frame.getInfo(), image.getHeader()))
-            {
+            if(!process_metadata(RealsenseMetadataSource.DEPTH, frame.getInfo(), image.getHeader())) {
                 Log.d(TAG, "WARNING: Skipping Depth Frame " + frame.getInfo().getFrameNum());
                 return;
             }
