@@ -19,3 +19,4 @@ build.log
 build-log.xml
 *~
 *.log
+.DS_Store
