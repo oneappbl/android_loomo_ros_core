@@ -73,7 +73,7 @@ public class RealsensePublisher implements LoomoRosBridgeConsumer, IMUDataCallba
 
     private Bitmap mRsColorBitmap, mFisheyeBitmap;
 
-    boolean mIsPubRsColor, mIsPubRsDepth, mIsPubFisheye;
+    public boolean mIsPubRsColor, mIsPubRsDepth, mIsPubFisheye;
 
     private boolean mColorStarted = false;
     private boolean mDepthStarted = false;
