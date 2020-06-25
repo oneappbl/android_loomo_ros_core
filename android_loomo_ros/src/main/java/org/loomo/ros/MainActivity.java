@@ -100,7 +100,7 @@ public class MainActivity extends RosActivity implements CompoundButton.OnChecke
     //     super("LoomoROS", "LoomoROS");
     // }
     public MainActivity() {
-        super("LoomoROS", "LoomoROS", URI.create("http://10.4.82.108:11311/"));
+        super("LoomoROS", "LoomoROS", URI.create("http://10.0.0.10:11311/"));
     }
 
     @RequiresApi(api = Build.VERSION_CODES.M)
