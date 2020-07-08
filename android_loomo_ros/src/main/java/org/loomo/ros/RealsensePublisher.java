@@ -100,7 +100,6 @@ public class RealsensePublisher implements LoomoRosBridgeConsumer, IMUDataCallba
     @Override
     public void start() {
         // No generic initialization is required
-        //Log.d(TAG, "STARTING _ NILESH");
         if (mBridgeNode == null || mVision == null) {
             Log.d(TAG, "Cannot start RealsensePublisher, ROS or Loomo SDK is not ready");
             return;
@@ -111,7 +110,6 @@ public class RealsensePublisher implements LoomoRosBridgeConsumer, IMUDataCallba
     public void stop() {
         // No generic de-initialization is required
         // TODO: really?
-        //Log.d(TAG, "STOP _ NILESH");
     }
 
     public void loomo_started(Vision mVision) {
@@ -384,7 +382,6 @@ public class RealsensePublisher implements LoomoRosBridgeConsumer, IMUDataCallba
 
             mBridgeNode.mRsColorCompressedPubr.publish(image);
 
-
             publishCameraInfo(2, image.getHeader());
         }
     };
@@ -417,7 +414,6 @@ public class RealsensePublisher implements LoomoRosBridgeConsumer, IMUDataCallba
                 Log.d(TAG, "WARNING: Skipping Depth Frame " + frame.getInfo().getFrameNum());
                 return;
             }
-            //Log.d(TAG, "GEtting frame SDK _ NILESH");
             try {
                 WritableByteChannel channel = Channels.newChannel(mRsDepthOutStream);
                 channel.write(frame.getByteBuffer());
@@ -439,8 +435,6 @@ public class RealsensePublisher implements LoomoRosBridgeConsumer, IMUDataCallba
                 skipFrameCounter += 1;
                 //Log.d(TAG, "Skipping frame : " + skipFrameCounter);
             }
-            //Log.d(TAG, "Depth queue size: " + mBridgeNode.mRsDepthPubr.getQueueLimit());
-            //image = null;
         }
     };
 

@@ -234,8 +234,10 @@ public class TFPublisher implements LoomoRosBridgeConsumer {
         quaternion.setY(cosRoll * sinPitch * cosYaw + sinRoll * cosPitch * sinYaw);
         quaternion.setZ(cosRoll * cosPitch * sinYaw - sinRoll * sinPitch * cosYaw);
         quaternion.setW(cosRoll * cosPitch * cosYaw + sinRoll * sinPitch * sinYaw);
+
         return quaternion;
     }
+
     private TransformStamped neckToLaserTransform(Time time, float pitch_val) {
         TransformStamped transformStamped = mBridgeNode.mMessageFactory.newFromType(TransformStamped._TYPE);
 
