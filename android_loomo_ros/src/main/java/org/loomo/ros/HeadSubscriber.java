@@ -63,12 +63,12 @@ public class HeadSubscriber implements LoomoRosBridgeConsumer {
         mHead.setHeadJointYaw(0.0f);
 
         Log.d(TAG, "start_sensor()");
-//        if (mHeadMotionThread == null) {
-//            mHeadMotionThread = new HeadMotionThread();
-//
-//            mThreadRunning = true; // Allow the thread to execute
-//            mHeadMotionThread.start();
-//        }
+        if (mHeadMotionThread == null) {
+            mHeadMotionThread = new HeadMotionThread();
+
+            mThreadRunning = true; // Allow the thread to execute
+            mHeadMotionThread.start();
+        }
 
         mHead.setHeadLightMode(8);
     }
@@ -99,24 +99,33 @@ public class HeadSubscriber implements LoomoRosBridgeConsumer {
         @Override
         public void run() {
             while(mHead != null && mThreadRunning) {
-                // Set head pose to 45 degrees, left
-                mHead.setHeadJointYaw((float) (30.0f * (Math.PI / 180.0f)));
+                // Set head pose to 0 degrees
+                mHead.setHeadJointYaw((float) (0.0f));
                 try {
-                    Thread.sleep(1500);
+                    Thread.sleep(100);
                 } catch (InterruptedException e) {
                     if (!mThreadRunning) {
                         return;
                     }
                 }
-                // Set head pose to 45 degrees, right
-                mHead.setHeadJointYaw((float) (-30.0f * (Math.PI / 180.0f)));
-                try {
-                    Thread.sleep(1500);
-                } catch (InterruptedException e) {
-                    if(!mThreadRunning) {
-                        return;
-                    }
-                }
+//                // Set head pose to 45 degrees, left
+//                mHead.setHeadJointYaw((float) (30.0f * (Math.PI / 180.0f)));
+//                try {
+//                    Thread.sleep(1500);
+//                } catch (InterruptedException e) {
+//                    if (!mThreadRunning) {
+//                        return;
+//                    }
+//                }
+//                // Set head pose to 45 degrees, right
+//                mHead.setHeadJointYaw((float) (-30.0f * (Math.PI / 180.0f)));
+//                try {
+//                    Thread.sleep(1500);
+//                } catch (InterruptedException e) {
+//                    if(!mThreadRunning) {
+//                        return;
+//                    }
+//                }
             }
         }
     }

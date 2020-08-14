@@ -8,6 +8,7 @@ import com.segway.robot.sdk.locomotion.sbv.AngularVelocity;
 import com.segway.robot.sdk.locomotion.sbv.Base;
 import com.segway.robot.sdk.locomotion.sbv.LinearVelocity;
 import com.segway.robot.sdk.perception.sensor.Sensor;
+import com.segway.robot.sdk.perception.sensor.SensorData;
 import com.segway.robot.sdk.vision.Vision;
 import com.segway.robot.sdk.vision.calibration.ColorDepthCalibration;
 import com.segway.robot.sdk.vision.calibration.Extrinsic;
@@ -215,6 +216,65 @@ public class TFPublisher implements LoomoRosBridgeConsumer {
 
         return transformStamped;
     }
+
+    // Added by Nilesh ******************************************************************************
+    private Quaternion setRPY(double roll, double pitch, double yaw)
+    {
+        double halfYaw = yaw * 0.5;
+        double halfPitch = pitch * 0.5;
+        double halfRoll = roll * 0.5;
+        double cosYaw = Math.cos(halfYaw);
+        double sinYaw = Math.sin(halfYaw);
+        double cosPitch = Math.cos(halfPitch);
+        double sinPitch = Math.sin(halfPitch);
+        double cosRoll = Math.cos(halfRoll);
+        double sinRoll = Math.sin(halfRoll);
+        Quaternion quaternion = mBridgeNode.mMessageFactory.newFromType(Quaternion._TYPE);
+        quaternion.setX(sinRoll * cosPitch * cosYaw - cosRoll * sinPitch * sinYaw);
+        quaternion.setY(cosRoll * sinPitch * cosYaw + sinRoll * cosPitch * sinYaw);
+        quaternion.setZ(cosRoll * cosPitch * sinYaw - sinRoll * sinPitch * cosYaw);
+        quaternion.setW(cosRoll * cosPitch * cosYaw + sinRoll * sinPitch * sinYaw);
+
+        return quaternion;
+    }
+
+    private TransformStamped neckToLaserTransform(Time time, float pitch_val) {
+        TransformStamped transformStamped = mBridgeNode.mMessageFactory.newFromType(TransformStamped._TYPE);
+
+        // Neck to laser
+        Vector3 vector3 = mBridgeNode.mMessageFactory.newFromType(Vector3._TYPE);
+        vector3.setX(0.0f);
+        vector3.setY(0.0f);
+        vector3.setZ(0.0f);
+
+        double roll = 0.0;
+        double pitch = -pitch_val*2.0;
+        double yaw = 0.0;
+        Quaternion quaternion = setRPY(roll, pitch, yaw);
+
+        Transform transform = mBridgeNode.mMessageFactory.newFromType(Transform._TYPE);
+        transform.setTranslation(vector3);
+        transform.setRotation(quaternion);
+
+        transformStamped.setTransform(transform);
+
+        String sourceFrame = "rsdepth_center_neck_fix_frame";
+        String targetFrame = "stabilized_laser";
+
+        if (mBridgeNode.use_tf_prefix) {
+            sourceFrame = mBridgeNode.tf_prefix + "_" + sourceFrame;
+            targetFrame = mBridgeNode.tf_prefix + "_" + targetFrame;
+        }
+
+        transformStamped.getHeader().setFrameId(sourceFrame);
+        transformStamped.setChildFrameId(targetFrame);
+
+        // Future-date this static transform
+        transformStamped.getHeader().setStamp(time.add(Duration.fromMillis(100)));
+
+        return transformStamped;
+    }
+    //***********************************************************************************************
 
     private TransformStamped baseLinkToUltrasonicTransform(Time time) {
         Vector3 vector3 = mBridgeNode.mMessageFactory.newFromType(Vector3._TYPE);
@@ -429,6 +489,14 @@ public class TFPublisher implements LoomoRosBridgeConsumer {
                     // Ultrasonic is static TF, 44cm up, 12cm forward
                     TransformStamped ultrasonicTf = baseLinkToUltrasonicTransform(stamp.second);
                     tfMessage.getTransforms().add(ultrasonicTf);
+
+                    // Added Nilesh *****************************************************************
+                    SensorData mBaseImu = mSensor.querySensorData(Arrays.asList(Sensor.BASE_IMU)).get(0);
+                    float mBasePitch = mBaseImu.getFloatData()[0];
+                    //Log.d(TAG, "Base_pitch:" + mBasePitch);
+                    TransformStamped laserTf = neckToLaserTransform(stamp.second, mBasePitch);
+                    tfMessage.getTransforms().add(laserTf);
+                    // ******************************************************************************
 
                     if (tfMessage.getTransforms().size() > 0) {
                         mBridgeNode.mTfPubr.publish(tfMessage);

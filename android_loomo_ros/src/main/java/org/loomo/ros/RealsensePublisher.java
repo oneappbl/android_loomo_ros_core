@@ -65,6 +65,9 @@ public class RealsensePublisher implements LoomoRosBridgeConsumer, IMUDataCallba
     private int mFisheyeWidth = 640;
     private int mFisheyeHeight = 480;
 
+    private int skipFrameCounter = 0;
+    private int numberOfSkippedFrames = 2;
+
     private ChannelBufferOutputStream mRsColorOutStream, mRsDepthOutStream, mFisheyeOutStream;
     private Queue<Long> mDepthStamps;
     private Queue<Pair<Long, Time>> mDepthRosStamps;
@@ -97,7 +100,6 @@ public class RealsensePublisher implements LoomoRosBridgeConsumer, IMUDataCallba
     @Override
     public void start() {
         // No generic initialization is required
-
         if (mBridgeNode == null || mVision == null) {
             Log.d(TAG, "Cannot start RealsensePublisher, ROS or Loomo SDK is not ready");
             return;
@@ -374,11 +376,12 @@ public class RealsensePublisher implements LoomoRosBridgeConsumer, IMUDataCallba
             // TODO: no more compression, it's too slow
             mRsColorBitmap.copyPixelsFromBuffer(frame.getByteBuffer()); // copy once
             mRsColorBitmap.compress(Bitmap.CompressFormat.JPEG, 75, mRsColorOutStream);
-            image.setData(mRsColorOutStream.buffer().copy());              // copy twice
+            image.setData(mRsColorOutStream.buffer().copy()); // copy twice
 
             mRsColorOutStream.buffer().clear();
 
             mBridgeNode.mRsColorCompressedPubr.publish(image);
+
             publishCameraInfo(2, image.getHeader());
         }
     };
@@ -411,7 +414,6 @@ public class RealsensePublisher implements LoomoRosBridgeConsumer, IMUDataCallba
                 Log.d(TAG, "WARNING: Skipping Depth Frame " + frame.getInfo().getFrameNum());
                 return;
             }
-
             try {
                 WritableByteChannel channel = Channels.newChannel(mRsDepthOutStream);
                 channel.write(frame.getByteBuffer());
@@ -420,10 +422,19 @@ public class RealsensePublisher implements LoomoRosBridgeConsumer, IMUDataCallba
                 return;
             }
             image.setData(mRsDepthOutStream.buffer().copy());
+            //Log.d(TAG,"Depth Buffer:"+mRsDepthOutStream.buffer().d);
+            //mRsDepthOutStream.buffer().discardReadBytes();
             mRsDepthOutStream.buffer().clear();
-
-            mBridgeNode.mRsDepthPubr.publish(image);
-            publishCameraInfo(3, image.getHeader());
+            if (skipFrameCounter >= numberOfSkippedFrames) {
+                mBridgeNode.mRsDepthPubr.publish(image);
+                publishCameraInfo(3, image.getHeader());
+                skipFrameCounter = 0;
+                //Log.d(TAG, "Publishing frame");
+            }
+            else{
+                skipFrameCounter += 1;
+                //Log.d(TAG, "Skipping frame : " + skipFrameCounter);
+            }
         }
     };
 
